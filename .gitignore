@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Environment files (contain secrets)
+.env
+frontend/.env
+
+# Build artifacts
+artifacts/
+cache/
+coverage/
+coverage.json
+typechain-types/
+
+# Frontend build
+frontend/build/
+
+# Subgraph build artifacts
+subgraph/build/
+subgraph/generated/
+
+# Deployments (auto-generated)
+deployments/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

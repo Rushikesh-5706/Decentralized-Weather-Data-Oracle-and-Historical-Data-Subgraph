@@ -1,0 +1,17 @@
+type WeatherReport @entity(immutable: true) {
+  id: Bytes!              # requestId (bytes32 from event)
+  city: String!
+  temperature: Int!       # in Celsius * 100 (e.g., 2532 = 25.32°C)
+  description: String!
+  timestamp: BigInt!
+  requester: Bytes!       # address of requester
+  transactionHash: Bytes! # for deduplication and audit trail
+}
+
+type WeatherRequest @entity(immutable: true) {
+  id: Bytes!              # requestId
+  city: String!
+  requester: Bytes!
+  timestamp: BigInt!
+  transactionHash: Bytes!
+}

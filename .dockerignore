@@ -1,0 +1,12 @@
+node_modules
+.env
+build
+.git
+coverage
+cache
+artifacts
+typechain-types
+frontend/build
+subgraph/build
+subgraph/generated
+.DS_Store
