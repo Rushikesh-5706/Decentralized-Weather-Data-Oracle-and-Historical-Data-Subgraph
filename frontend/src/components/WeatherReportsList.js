@@ -1,4 +1,5 @@
 import React from "react";
+import PropTypes from "prop-types";
 import { useQuery, gql } from "@apollo/client";
 
 // Query 1: Latest 20 fulfilled weather reports
