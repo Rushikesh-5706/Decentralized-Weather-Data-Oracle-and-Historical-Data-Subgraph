@@ -2,41 +2,32 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
 describe("WeatherOracle", function () {
-    let WeatherOracle, weatherOracle;
-    let MockOracle, chainlinkOracle;
-    let MockLinkToken, linkToken;
+    let weatherOracle, chainlinkOracle, linkToken;
     let owner, user, anyone;
+    let weatherOracleAddress, chainlinkOracleAddress, linkTokenAddress;
     const jobId = ethers.encodeBytes32String("testJobId");
     const chainlinkFee = ethers.parseEther("0.1");
-
-    let weatherOracleAddress;
-    let chainlinkOracleAddress;
-    let linkTokenAddress;
 
     beforeEach(async function () {
         [owner, user, anyone] = await ethers.getSigners();
 
-        MockLinkToken = await ethers.getContractFactory("MockLinkToken");
+        const MockLinkToken = await ethers.getContractFactory("MockLinkToken");
         linkToken = await MockLinkToken.deploy();
         await linkToken.waitForDeployment();
         linkTokenAddress = await linkToken.getAddress();
 
-        MockOracle = await ethers.getContractFactory("MockOracle");
+        const MockOracle = await ethers.getContractFactory("MockOracle");
         chainlinkOracle = await MockOracle.deploy();
         await chainlinkOracle.waitForDeployment();
         chainlinkOracleAddress = await chainlinkOracle.getAddress();
 
-        WeatherOracle = await ethers.getContractFactory("WeatherOracle");
+        const WeatherOracle = await ethers.getContractFactory("WeatherOracle");
         weatherOracle = await WeatherOracle.deploy(
-            linkTokenAddress,
-            chainlinkOracleAddress,
-            jobId,
-            chainlinkFee
+            linkTokenAddress, chainlinkOracleAddress, jobId, chainlinkFee
         );
         await weatherOracle.waitForDeployment();
         weatherOracleAddress = await weatherOracle.getAddress();
-
-        await weatherOracle.setApiKey("test-key");
+        await weatherOracle.setApiKey("test-api-key");
     });
 
     describe("DEPLOYMENT TESTS", function () {
@@ -82,7 +73,6 @@ describe("WeatherOracle", function () {
     });
 
     describe("requestWeather TESTS", function () {
-        let requestId;
         beforeEach(async function () {
             await linkToken.transfer(weatherOracleAddress, ethers.parseEther("1"));
         });
@@ -101,15 +91,12 @@ describe("WeatherOracle", function () {
         it("Should emit WeatherRequested event with correct args", async function () {
             const tx = await weatherOracle.connect(user).requestWeather("London");
             const receipt = await tx.wait();
-
             const event = receipt.logs.map(log => {
                 try { return weatherOracle.interface.parseLog(log); } catch (e) { return null; }
-            }).find((x) => x && x.name === "WeatherRequested");
-
+            }).find(x => x && x.name === "WeatherRequested");
             expect(event).to.not.be.undefined;
             expect(event.args.city).to.equal("London");
             expect(event.args.requester).to.equal(user.address);
-            requestId = event.args.requestId;
         });
 
         it("Should return a non-zero requestId", async function () {
@@ -117,16 +104,44 @@ describe("WeatherOracle", function () {
             const receipt = await tx.wait();
             const event = receipt.logs.map(log => {
                 try { return weatherOracle.interface.parseLog(log); } catch (e) { return null; }
-            }).find((x) => x && x.name === "WeatherRequested");
+            }).find(x => x && x.name === "WeatherRequested");
             expect(event.args.requestId).to.not.equal(ethers.ZeroHash);
         });
 
-        it("Should store city in pendingCities mapping", async function () {
+        it("Should store city in pendingCities mapping (verified via successful fulfill)", async function () {
             const tx = await weatherOracle.connect(user).requestWeather("London");
-            await tx.wait();
+            const receipt = await tx.wait();
+            const event = receipt.logs.map(log => {
+                try { return weatherOracle.interface.parseLog(log); } catch (e) { return null; }
+            }).find(x => x && x.name === "WeatherRequested");
+            const reqId = event.args.requestId;
+
+            await expect(
+                chainlinkOracle.fulfillOracleRequestInt256(
+                    reqId, weatherOracleAddress,
+                    weatherOracle.interface.getFunction("fulfill").selector, 2000n
+                )
+            ).to.not.be.reverted;
+
+            const report = await weatherOracle.getWeatherReport(reqId);
+            expect(report.city).to.equal("London");
         });
 
-        it("Should store requester in pendingRequesters mapping", async function () {
+        it("Should store requester in pendingRequesters mapping (verified via stored report)", async function () {
+            const tx = await weatherOracle.connect(user).requestWeather("London");
+            const receipt = await tx.wait();
+            const event = receipt.logs.map(log => {
+                try { return weatherOracle.interface.parseLog(log); } catch (e) { return null; }
+            }).find(x => x && x.name === "WeatherRequested");
+            const reqId = event.args.requestId;
+
+            await chainlinkOracle.fulfillOracleRequestInt256(
+                reqId, weatherOracleAddress,
+                weatherOracle.interface.getFunction("fulfill").selector, 2000n
+            );
+
+            const report = await weatherOracle.getWeatherReport(reqId);
+            expect(report.requester).to.equal(user.address);
         });
     });
 
@@ -139,41 +154,36 @@ describe("WeatherOracle", function () {
             const receipt = await tx.wait();
             const event = receipt.logs.map(log => {
                 try { return weatherOracle.interface.parseLog(log); } catch (e) { return null; }
-            }).find((x) => x && x.name === "WeatherRequested");
+            }).find(x => x && x.name === "WeatherRequested");
             reqId = event.args.requestId;
         });
 
         it("Should only be callable via Chainlink fulfillment mechanism", async function () {
-            await expect(weatherOracle.fulfill(reqId, 2000n)).to.be.revertedWith("Source must be the oracle of the request");
+            await expect(weatherOracle.fulfill(reqId, 2000n))
+                .to.be.revertedWith("Source must be the oracle of the request");
         });
 
         it("Should store WeatherReport correctly after fulfill", async function () {
             await chainlinkOracle.fulfillOracleRequestInt256(
-                reqId,
-                weatherOracleAddress,
-                weatherOracle.interface.getFunction("fulfill").selector,
-                2800n
+                reqId, weatherOracleAddress,
+                weatherOracle.interface.getFunction("fulfill").selector, 2800n
             );
             const report = await weatherOracle.getWeatherReport(reqId);
             expect(report.city).to.equal("London");
             expect(report.temperature).to.equal(2800n);
             expect(report.requester).to.equal(user.address);
+            expect(report.timestamp).to.be.gt(0n);
         });
 
         it("Should emit WeatherReported event with correct args", async function () {
             const tx = await chainlinkOracle.fulfillOracleRequestInt256(
-                reqId,
-                weatherOracleAddress,
-                weatherOracle.interface.getFunction("fulfill").selector,
-                2800n
+                reqId, weatherOracleAddress,
+                weatherOracle.interface.getFunction("fulfill").selector, 2800n
             );
             const receipt = await tx.wait();
-
             const parsedEvent = receipt.logs.map(log => {
                 try { return weatherOracle.interface.parseLog(log); } catch (e) { return null; }
-            }).find((x) => x && x.name === "WeatherReported");
-
-            expect(parsedEvent.name).to.equal("WeatherReported");
+            }).find(x => x && x.name === "WeatherReported");
             expect(parsedEvent.args.requestId).to.equal(reqId);
             expect(parsedEvent.args.city).to.equal("London");
             expect(parsedEvent.args.temperature).to.equal(2800n);
@@ -195,56 +205,44 @@ describe("WeatherOracle", function () {
 
             for (let i = 0; i < tests.length; i++) {
                 const { temp, expected } = tests[i];
-
                 const requestTx = await weatherOracle.connect(user).requestWeather(`City${i}`);
                 const requestReceipt = await requestTx.wait();
                 const requestEvent = requestReceipt.logs.map(log => {
                     try { return weatherOracle.interface.parseLog(log); } catch (e) { return null; }
-                }).find((x) => x && x.name === "WeatherRequested");
+                }).find(x => x && x.name === "WeatherRequested");
                 const currentReqId = requestEvent.args.requestId;
 
                 await chainlinkOracle.fulfillOracleRequestInt256(
-                    currentReqId,
-                    weatherOracleAddress,
-                    weatherOracle.interface.getFunction("fulfill").selector,
-                    temp
+                    currentReqId, weatherOracleAddress,
+                    weatherOracle.interface.getFunction("fulfill").selector, temp
                 );
-
                 const report = await weatherOracle.getWeatherReport(currentReqId);
-                expect(report.description).to.equal(expected);
+                expect(report.description).to.equal(expected, `Failed for temp=${temp}`);
             }
         });
 
         it("Should clean up pendingCities and pendingRequesters after fulfill", async function () {
             await chainlinkOracle.fulfillOracleRequestInt256(
-                reqId,
-                weatherOracleAddress,
-                weatherOracle.interface.getFunction("fulfill").selector,
-                2000n
+                reqId, weatherOracleAddress,
+                weatherOracle.interface.getFunction("fulfill").selector, 2000n
             );
             await expect(
                 chainlinkOracle.fulfillOracleRequestInt256(
-                    reqId,
-                    weatherOracleAddress,
-                    weatherOracle.interface.getFunction("fulfill").selector,
-                    2000n
+                    reqId, weatherOracleAddress,
+                    weatherOracle.interface.getFunction("fulfill").selector, 2000n
                 )
             ).to.be.revertedWith("Source must be the oracle of the request");
         });
 
         it("Duplicate fulfillment of same requestId should revert", async function () {
             await chainlinkOracle.fulfillOracleRequestInt256(
-                reqId,
-                weatherOracleAddress,
-                weatherOracle.interface.getFunction("fulfill").selector,
-                2000n
+                reqId, weatherOracleAddress,
+                weatherOracle.interface.getFunction("fulfill").selector, 2000n
             );
             await expect(
                 chainlinkOracle.fulfillOracleRequestInt256(
-                    reqId,
-                    weatherOracleAddress,
-                    weatherOracle.interface.getFunction("fulfill").selector,
-                    2000n
+                    reqId, weatherOracleAddress,
+                    weatherOracle.interface.getFunction("fulfill").selector, 2000n
                 )
             ).to.be.revertedWith("Source must be the oracle of the request");
         });

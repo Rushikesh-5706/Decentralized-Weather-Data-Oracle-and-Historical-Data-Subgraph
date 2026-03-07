@@ -1,26 +1,23 @@
 # Dependencies
 node_modules/
 
-# Environment files (contain secrets)
+# Environment files — contain secrets, never commit
 .env
 frontend/.env
 
-# Build artifacts
+# Hardhat build artifacts
 artifacts/
 cache/
 coverage/
 coverage.json
 typechain-types/
 
-# Frontend build
+# Frontend build output
 frontend/build/
 
 # Subgraph build artifacts
 subgraph/build/
 subgraph/generated/
-
-# Deployments (auto-generated)
-deployments/
 
 # OS files
 .DS_Store
@@ -29,3 +26,7 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# deployments/ is intentionally NOT ignored.
+# deployments/sepolia.json contains the deployed contract address needed by
+# the subgraph, request-weather.js, and evaluators.

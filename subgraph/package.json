@@ -1,10 +1,11 @@
 {
     "name": "weather-oracle-subgraph",
-    "license": "UNLICENSED",
+    "license": "MIT",
     "scripts": {
         "codegen": "graph codegen",
         "build": "graph build",
-        "deploy": "graph deploy --node https://api.thegraph.com/deploy/ --ipfs https://api.thegraph.com/ipfs/ weather-oracle-sepolia"
+        "auth": "graph auth --studio $GRAPH_ACCESS_TOKEN",
+        "deploy": "graph deploy --studio weather-oracle-sepolia --version-label v1"
     },
     "dependencies": {
         "@graphprotocol/graph-cli": "^0.68.0",

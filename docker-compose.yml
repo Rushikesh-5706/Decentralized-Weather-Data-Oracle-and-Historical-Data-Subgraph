@@ -5,26 +5,27 @@ services:
     image: node:18-alpine
     working_dir: /app
     command: sh -c "npm install && npx hardhat node --hostname 0.0.0.0"
-    ports: 
+    ports:
       - "8545:8545"
-    volumes: 
+    volumes:
       - ".:/app"
       - "/app/node_modules"
     environment:
       - NODE_ENV=development
     healthcheck:
-      test: ["CMD-SHELL", "curl --fail http://localhost:8545 || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8545 || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   frontend:
     image: node:18-alpine
     working_dir: /app/frontend
-    command: sh -c "npm install && npm start"
-    ports: 
+    command: sh -c "npm install && CHOKIDAR_USEPOLLING=true npm start"
+    ports:
       - "3000:3000"
-    volumes: 
+    volumes:
       - ".:/app"
       - "/app/frontend/node_modules"
     environment:
@@ -32,5 +33,6 @@ services:
       - REACT_APP_SUBGRAPH_URL=${REACT_APP_SUBGRAPH_URL}
       - REACT_APP_NETWORK_ID=${REACT_APP_NETWORK_ID}
       - REACT_APP_NETWORK_NAME=${REACT_APP_NETWORK_NAME}
+      - WDS_SOCKET_PORT=0
     depends_on:
       - hardhat-node
