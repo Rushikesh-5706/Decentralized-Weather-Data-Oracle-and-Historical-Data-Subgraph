@@ -8,7 +8,7 @@ dataSources:
     source:
       address: "0xB0DEaFedBCDD7A065126D9d8f23ae1bDBB121915"
       abi: WeatherOracle
-      startBlock: 0
+      startBlock: 7848300
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
