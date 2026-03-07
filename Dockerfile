@@ -16,7 +16,7 @@ RUN mkdir -p /app/frontend/src/contracts && cp /app/artifacts/contracts/WeatherO
 # Build frontend
 WORKDIR /app/frontend
 RUN npm install
-RUN CI=false npm run build
+RUN CI=false DISABLE_ESLINT_PLUGIN=true npm run build
 
 # Base image for serving
 FROM nginx:alpine

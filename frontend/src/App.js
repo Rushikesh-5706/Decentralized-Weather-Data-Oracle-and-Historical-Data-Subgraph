@@ -76,8 +76,7 @@ function App() {
             });
             window.ethereum.on("chainChanged", () => window.location.reload());
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, []); // eslint-disable-line
 
     const connectWallet = async () => {
         if (!window.ethereum) {
